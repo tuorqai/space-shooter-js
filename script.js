@@ -69,6 +69,10 @@ Scene.prototype.restart = function() {
 
     this.enemySpawnTime = Date.now() + 10000;
     this.meteorSpawnTime = Date.now() + 500;
+    this.boltSpawnTime = Date.now() + 2000;
+
+    this.timeLeft = 100;
+    this.timeDecreaseTime = 0;
 };
 
 Scene.prototype.loop = function() {
@@ -94,10 +98,20 @@ Scene.prototype.update = function() {
         this.restartTime = -1;
     }
 
+    if (this.sprites[0].health > 0 && Date.now() > this.timeDecreaseTime) {
+        this.timeLeft--;
+        this.timeDecreaseTime = Date.now() + 800;
+    }
+
+    if (this.timeLeft <= 0) {
+        this.sprites[0].inflictDamage(1000);
+    }
+
     this.commands.forEach(command => this.sprites[0].command(command));
 
     let enemyCount = 0;
     let meteorCount = 0;
+    let boltCount = 0;
 
     for (let i = 0; i < this.sprites.length; i++) {
         this.sprites[i].update();
@@ -130,6 +144,8 @@ Scene.prototype.update = function() {
                     enemyCount++;
                 } else if (this.sprites[i].category == 'meteor') {
                     meteorCount++;
+                } else if (this.sprites[i].category == 'bolt') {
+                    boltCount++;
                 }
             }
         }
@@ -148,6 +164,12 @@ Scene.prototype.update = function() {
         const point = randomPointInDonutArea(this.sprites[0].x, this.sprites[0].y, 1024, 4096);
         this.sprites.push(new Meteor(point.x, point.y, 'big'));
         this.meteorSpawnTime = Date.now() + 200;
+    }
+
+    if (boltCount < 50 && Date.now() > this.boltSpawnTime) {
+        const point = randomPointInDonutArea(this.sprites[0].x, this.sprites[0].y, 1024, 4096);
+        this.sprites.push(new Bolt(point.x, point.y));
+        this.boltSpawnTime = Date.now() + 500;
     }
 };
 
@@ -228,6 +250,7 @@ function UI() {
     this.icons = {
         'x': loadImage(`assets/PNG/UI/numeralX.png`),
         'life': loadImage(`assets/PNG/UI/playerLife1_orange.png`),
+        'bolt': loadImage(`assets/PNG/Power-ups/bolt_gold.png`)
     };
 }
 
@@ -239,6 +262,8 @@ UI.prototype.draw = function() {
     this.drawNumber(19 * 4, 19, scene.playerLives, 2);
     this.drawNumber(canvas.width - 19 * 11, 19, scene.playerScore, 10);
     this.drawHealthBar(scene.sprites[0].health);
+    this.drawIcon(19, 19 * 3, this.icons['bolt']);
+    this.drawNumber(19 * 3, 20 * 3, scene.timeLeft, 3);
 
     ctx.restore();
 };
@@ -483,7 +508,7 @@ Player.prototype.collision = function(other) {
     if (other.category == 'meteor' && other.w >= 64 && other.h >= 64) {
         this.dx /= 2;
         this.dy /= 2;
-        this.inflictDamage(25);
+        this.inflictDamage(80);
         other.inflictDamage(100);
     }
 };
@@ -634,6 +659,10 @@ Projectile.prototype.collision = function(other) {
         return;
     }
 
+    if (other.category == 'bolt') {
+        return;
+    }
+
     other.inflictDamage(5);
 
     if (this.owner.category == 'player') {
@@ -760,6 +789,31 @@ Meteor.prototype.break = function() {
         meteor.dy = Math.random() * 8 - 4;
         meteor.dr = (1 + Math.random() * 9) * (Math.PI / 180);
         scene.sprites.push(meteor);
+    }
+};
+
+//------------------------------------------------------------------------------
+// Bolt
+
+function Bolt(x, y) {
+    Sprite.call(this, x, y, 0);
+
+    this.w = 16;
+    this.h = 16;
+    this.r = -Math.PI / 2;
+
+    this.pushFrame(`assets/PNG/Power-ups/powerupYellow_bolt.png`);
+    this.setAnimation(0, 1);
+}
+
+Object.setPrototypeOf(Bolt.prototype, Sprite.prototype);
+
+Bolt.prototype.category = 'bolt';
+
+Bolt.prototype.collision = function(other) {
+    if (other.category == 'player') {
+        scene.timeLeft += 20;
+        this.disposed = true;
     }
 };
 
